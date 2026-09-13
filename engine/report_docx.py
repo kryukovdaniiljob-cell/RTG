@@ -89,6 +89,65 @@ def word(путь, св, списки, S, cfg, лог=print, графики=None
             pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
             pp.paragraph_format.space_after = Pt(8)
 
+    # ---------------------------------------------------------- оформление
+    БЛОКИ = "▁▂▃▄▅▆▇█"
+
+    def спарк(r):
+        """Мини-график динамики блочными символами — читается прямо в таблице."""
+        мк = sorted([c for c in r.index
+                     if len(str(c)) == 3 and str(c).startswith("М") and str(c)[1:].isdigit()])
+        з = [float(r.get(c) or 0) for c in мк]
+        if not з or max(з) <= 0:
+            return "—"
+        mx = max(з)
+        return "".join(БЛОКИ[min(len(БЛОКИ) - 1, int(v / mx * (len(БЛОКИ) - 1)))] for v in з)
+
+    def поле(p, код):
+        """Вставка поля Word (оглавление, номер страницы)."""
+        r = p.add_run()
+        f1 = OxmlElement("w:fldChar"); f1.set(qn("w:fldCharType"), "begin")
+        it = OxmlElement("w:instrText"); it.set(qn("xml:space"), "preserve"); it.text = код
+        f2 = OxmlElement("w:fldChar"); f2.set(qn("w:fldCharType"), "separate")
+        t = OxmlElement("w:t"); t.text = "…"
+        f3 = OxmlElement("w:fldChar"); f3.set(qn("w:fldCharType"), "end")
+        for el in (f1, it, f2, t, f3):
+            r._r.append(el)
+        return r
+
+    def врезка(текст, цвет="1F3864", фон="EDF1F7"):
+        """Ключевой вывод в цветной рамке."""
+        t = doc.add_table(rows=1, cols=1); t.style = "Table Grid"
+        c = t.rows[0].cells[0]; c.text = ""
+        shade(c, фон)
+        tcPr = c._tc.get_or_add_tcPr()
+        borders = OxmlElement("w:tcBorders")
+        for сторона, ш in (("left", "24"), ("top", "4"), ("bottom", "4"), ("right", "4")):
+            b = OxmlElement("w:" + сторона)
+            b.set(qn("w:val"), "single"); b.set(qn("w:sz"), ш)
+            b.set(qn("w:color"), цвет if сторона == "left" else "D6DCE5")
+            borders.append(b)
+        tcPr.append(borders)
+        rr = c.paragraphs[0].add_run(текст)
+        rr.font.size = Pt(10.5); rr.font.name = "Arial"; rr.bold = True
+        rr.font.color.rgb = RGBColor.from_string(цвет)
+        c.paragraphs[0].paragraph_format.space_before = Pt(4)
+        c.paragraphs[0].paragraph_format.space_after = Pt(4)
+        doc.add_paragraph().paragraph_format.space_after = Pt(4)
+
+    # колонтитулы
+    hdr = sec.header.paragraphs[0]
+    r = hdr.add_run("Категорийная аналитика РТГ · данные на %s" % S["дата"])
+    r.font.size = Pt(8); r.font.name = "Arial"; r.font.color.rgb = RGBColor.from_string(СЕРЫЙ)
+    hdr.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    ftr = sec.footer.paragraphs[0]; ftr.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = ftr.add_run("стр. "); r.font.size = Pt(8); r.font.name = "Arial"
+    r.font.color.rgb = RGBColor.from_string(СЕРЫЙ)
+    поле(ftr, "PAGE")
+    r = ftr.add_run(" из "); r.font.size = Pt(8); r.font.name = "Arial"
+    r.font.color.rgb = RGBColor.from_string(СЕРЫЙ)
+    поле(ftr, "NUMPAGES")
+
+
     l1, l2, l3 = св["L1_Группа планирования"], св["L2_Направление"], св["L3_Группа 1"]
     br, w1, w2 = св.get("B1_Бренд"), св.get("W1_Филиал"), св.get("W2_Тип склада")
     w3, w4, xyz = св.get("W3_Склад"), св.get("W4_Направление x Склад"), св.get("S1_Сегмент XYZ")
@@ -98,19 +157,51 @@ def word(путь, св, списки, S, cfg, лог=print, графики=None
     приор = S.get("приоритеты") or []
 
     # ================================================== СТРАНИЦА 1: РУКОВОДСТВУ
+    # ------------------------------------------------- ТИТУЛЬНЫЙ ЛИСТ
+    for _ in range(5):
+        doc.add_paragraph()
     p = doc.add_paragraph(); r = p.add_run("АНАЛИТИЧЕСКАЯ ЗАПИСКА")
-    r.bold = True; r.font.size = Pt(19); r.font.name = "Arial"
+    r.bold = True; r.font.size = Pt(26); r.font.name = "Arial"
     r.font.color.rgb = RGBColor.from_string(СИНИЙ); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p = doc.add_paragraph(); r = p.add_run("Категорийный анализ товарного портфеля · дивизион РТГ")
-    r.font.size = Pt(12); r.font.name = "Arial"; p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p = doc.add_paragraph(); r = p.add_run("Данные на %s · период %d дней" % (S["дата"], S["дней"]))
-    r.font.size = Pt(9.5); r.italic = True; r.font.name = "Arial"; p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p = doc.add_paragraph(); r = p.add_run("Категорийный анализ товарного портфеля")
+    r.font.size = Pt(15); r.font.name = "Arial"; p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p = doc.add_paragraph(); r = p.add_run("Дивизион РТГ")
+    r.font.size = Pt(15); r.bold = True; r.font.name = "Arial"; p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for _ in range(6):
+        doc.add_paragraph()
+    tt = doc.add_table(rows=4, cols=2); tt.alignment = WD_TABLE_ALIGNMENT.CENTER
+    сведения = [("Период анализа", "01.01 - %s (%d дней)" % (S["дата"], S["дней"])),
+                ("Данные на", S["дата"]),
+                ("Периметр", "%s SKU, %s млн руб. запаса" % (цел(S["sku"]), млн(S["запас"]))),
+                ("Подготовлено", "автоматически, категорийная аналитика РТГ")]
+    for kk, (aa, bb) in enumerate(сведения):
+        for кол, знач, жирн in ((0, aa, False), (1, bb, True)):
+            c = tt.rows[kk].cells[кол]; c.text = ""
+            rr = c.paragraphs[0].add_run(знач)
+            rr.font.size = Pt(10.5); rr.font.name = "Arial"; rr.bold = жирн
+            if кол == 0:
+                rr.font.color.rgb = RGBColor.from_string(СЕРЫЙ)
+            c.width = Cm(5.4 if кол == 0 else 9.4)
+    for _ in range(7):
+        doc.add_paragraph()
+    p = doc.add_paragraph(); r = p.add_run("Документ содержит коммерческую информацию")
+    r.font.size = Pt(8.5); r.italic = True; r.font.name = "Arial"
+    r.font.color.rgb = RGBColor.from_string(СЕРЫЙ); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_page_break()
+
+    # ------------------------------------------------- ОГЛАВЛЕНИЕ
+    H("Содержание", 1)
+    p = doc.add_paragraph()
+    поле(p, 'TOC \\o "1-2" \\h \\z \\u')
+    P("Чтобы номера страниц заполнились, нажмите Ctrl+A, затем F9 и выберите «Обновить целиком». "
+      "Word делает это один раз при первом открытии.", italic=True, size=8.5)
+    doc.add_page_break()
 
     H("Главное", 1)
     плох = l2[(l2["GMROI"] < порог) & l2["GMROI"].notna()]
-    P("Каждый рубль запаса приносит %s руб. валовой прибыли в год при стоимости владения %s руб. "
-      "Портфель окупается, но запас прочности небольшой."
-      % (гм(S["gmroi"]), пц(порог, 2)), bold=True)
+    врезка("Каждый рубль запаса приносит %s руб. валовой прибыли в год при стоимости владения "
+           "%s руб. Портфель окупается, но запас прочности небольшой."
+           % (гм(S["gmroi"]), пц(порог, 2)))
     TBL(["", "Значение", "Что это значит"],
         [["Запас периметра", млн(S["запас"]) + " млн ₽",
           "из них %s млн ₽ не продаётся вовсе" % млн(S["вывести"]["запас"] + S["новинки"]["запас"])],
@@ -121,12 +212,13 @@ def word(путь, св, списки, S, cfg, лог=print, графики=None
         [4.6, 3.4, 9.0], fs=9)
 
     if безд:
-        P("Если не делать ничего, за квартал потеряем %s млн ₽ — %s млн на содержании ненужного запаса "
-          "и %s млн упущенной прибыли на дефиците. При этом %s млн ₽ остаются замороженными."
-          % (млн(безд["итого_потери"]),
-             млн(безд["содержание_неликвида"] + безд["содержание_медленного"]),
-             млн(безд["упущенная_прибыль"]), млн(безд["замороженный_капитал"])),
-          bold=True, color=КРАСНЫЙ)
+        врезка("Если не делать ничего, за квартал потеряем %s млн ₽: %s млн на содержании ненужного "
+               "запаса и %s млн упущенной прибыли на дефиците. При этом %s млн ₽ остаются "
+               "замороженными."
+               % (млн(безд["итого_потери"]),
+                  млн(безд["содержание_неликвида"] + безд["содержание_медленного"]),
+                  млн(безд["упущенная_прибыль"]), млн(безд["замороженный_капитал"])),
+               цвет=КРАСНЫЙ, фон="FDECEA")
 
     H("Три решения по приоритету", 2)
     if приор:
@@ -134,8 +226,8 @@ def word(путь, св, списки, S, cfg, лог=print, графики=None
             [[p_["имя"], млн(p_["деньги"]) if p_["деньги"] else "—",
               млн(p_["эффект_год"]), p_["срок"], p_["комментарий"]] for p_ in приор[:3]],
             [4.4, 2.4, 2.4, 1.8, 6.0], fs=8.5)
-    P("Прошу согласовать первый пункт — он не требует денег и закрывает часть дефицита "
-      "за счёт уже купленного товара.", bold=True)
+    врезка("Прошу согласовать первый пункт: он не требует денег и закрывает часть дефицита "
+           "за счёт уже купленного товара.", цвет="00713C", фон="EAF5EC")
 
     if изм.get("показатели"):
         H("Что изменилось с расчёта от %s" % изм.get("с_датой", "—"), 2)
@@ -185,14 +277,14 @@ def word(путь, св, списки, S, cfg, лог=print, графики=None
           % (", ".join(str(x)[:26] for x in плох["Товарное направление"]),
              млн(плох["Запас"].sum()), млн(abs(плох["Эконом_прибыль"].sum()))), bold=True)
 
-    ШАПКА = ["Наименование", "SKU", "Оборот, млн ₽", "Маржа", "Запас, млн ₽", "Дней", "GMROI",
-             "Эк. прибыль, млн ₽/год", "OOS"]
-    Ш = [4.6, 1.2, 1.8, 1.2, 1.8, 1.0, 1.2, 2.4, 1.1]
+    ШАПКА = ["Наименование", "Динамика", "SKU", "Оборот, млн ₽", "Маржа", "Запас, млн ₽", "Дней",
+             "GMROI", "Эк. прибыль, млн ₽/год", "OOS"]
+    Ш = [4.0, 1.5, 1.1, 1.7, 1.1, 1.7, 0.9, 1.1, 2.2, 1.0]
 
     def строки(df, keys, n=None, сорт="Оборот", возр=False):
         d = df.sort_values(сорт, ascending=возр, na_position="last")
         if n: d = d.head(n)
-        return [[" · ".join(str(r[k])[:30] for k in keys), цел(r.SKU), млн(r.Оборот),
+        return [[" · ".join(str(r[k])[:28] for k in keys), спарк(r), цел(r.SKU), млн(r.Оборот),
                  пц(r["Маржа_%"]) + " %", млн(r.Запас), дн(r.Дней_запаса), гм(r.GMROI),
                  знак(r.Эконом_прибыль),
                  (пц(r["OOS_%"], 0) + " %") if pd.notna(r["OOS_%"]) else "—"]
