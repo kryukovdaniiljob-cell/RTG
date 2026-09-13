@@ -26,6 +26,14 @@ from reports import млн, цел, пц
 ]
 
 
+def _окр(v, знаков=0):
+    """Округление: в JSON не нужны копейки, они удваивают вес файла."""
+    if v is None or pd.isna(v) or (isinstance(v, float) and not np.isfinite(v)):
+        return None
+    v = round(float(v), знаков)
+    return int(v) if знаков == 0 else v
+
+
 def _pack(df, keys):
     rows = []
     for _, r in df.iterrows():
@@ -34,9 +42,10 @@ def _pack(df, keys):
             return None if (v is None or pd.isna(v) or (isinstance(v, float) and not np.isfinite(v))) else float(v)
         м = f(r.get("Маржа_%"))
         rows.append({"n": имя, "sku": int(r.SKU), "dead": int(r["SKU_мёртвых"]),
-                     "rev": float(r.Оборот), "mar": м if (м is None or abs(м) < 1e4) else None,
-                     "st": float(r.Запас), "d": f(r.get("Дней_запаса")), "g": f(r.get("GMROI")),
-                     "ep": float(r.Эконом_прибыль), "oos": f(r.get("OOS_%")), "z": f(r.get("Засол_%"))})
+                     "rev": _окр(r.Оборот), "mar": _окр(м, 1) if (м is None or abs(м) < 1e4) else None,
+                     "st": _окр(r.Запас), "d": _окр(r.get("Дней_запаса")), "g": _окр(r.get("GMROI"), 2),
+                     "ep": _окр(r.Эконом_прибыль), "oos": _окр(r.get("OOS_%"), 1),
+                     "z": _окр(r.get("Засол_%"), 1)})
     return sorted(rows, key=lambda x: -x["rev"])
 
 
@@ -120,7 +129,7 @@ def dashboard(путь, св, списки, S, cfg, ряды, лог=print):
     for k, v in {
         "__ДАТА__": S["дата"], "__SKU__": цел(S["sku"]), "__KPI__": kpi, "__ПОРОГ__": пц(порог, 2),
         "__CH1__": ch1, "__CH2__": ch2, "__MX__": мx, "__ДНЕЙ__": str(S["дней"]),
-        "__ДАННЫЕ__": json.dumps(D, ensure_ascii=False),
+        "__ДАННЫЕ__": json.dumps(D, ensure_ascii=False, separators=(",", ":")),
         "__OWN__": str(порог), "__GOOD__": str(хор),
         "__ЛИМИТ__": str(int(cfg["отчёты"]["строк_в_дашборде"])),
     }.items():
