@@ -189,8 +189,11 @@ def main():
         арх = os.path.join(КОРЕНЬ, "2_АРХИВ", суф)
         os.makedirs(арх, exist_ok=True)
         for к, p in пути.items():
+            цель = os.path.join(арх, os.path.basename(p))
             try:
-                shutil.move(p, os.path.join(арх, os.path.basename(p)))
+                if os.path.exists(цель):
+                    os.remove(цель)      # повторный расчёт за день заменяет архив
+                shutil.move(p, цель)
                 лог("   -> 2_АРХИВ/%s/%s" % (суф, os.path.basename(p)))
             except Exception as e:
                 лог("   ! не удалось переместить %s: %s" % (os.path.basename(p), e))

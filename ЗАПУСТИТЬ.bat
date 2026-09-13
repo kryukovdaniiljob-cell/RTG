@@ -1,33 +1,39 @@
 @echo off
-chcp 65001 >nul
+chcp 866 >nul
 cd /d "%~dp0"
-title ╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╨╣╨╜╨░╤П ╨░╨╜╨░╨╗╨╕╤В╨╕╨║╨░ ╨а╨в╨У
+title Kategoriynaya analitika RTG
 echo.
-echo   ╨Ъ╨Р╨в╨Х╨У╨Ю╨а╨Ш╨Щ╨Э╨Р╨п ╨Р╨Э╨Р╨Ы╨Ш╨в╨Ш╨Ъ╨Р ╨а╨в╨У
-echo   ==========================
+echo   ==================================
+echo     КАТЕГОРИЙНАЯ АНАЛИТИКА РТГ
+echo   ==================================
 echo.
 where python >nul 2>nul
-if errorlevel 1 (
-  echo   ╨Ю╨и╨Ш╨С╨Ъ╨Р: Python ╨╜╨╡ ╤Г╤Б╤В╨░╨╜╨╛╨▓╨╗╨╡╨╜.
-  echo   ╨б╨║╨░╤З╨░╨╣╤В╨╡ ╤Б python.org, ╨┐╤А╨╕ ╤Г╤Б╤В╨░╨╜╨╛╨▓╨║╨╡ ╨╛╤В╨╝╨╡╤В╤М╤В╨╡ "Add Python to PATH".
-  echo.
-  pause
-  exit /b 1
-)
-echo   ╨Я╤А╨╛╨▓╨╡╤А╤П╤О ╨▒╨╕╨▒╨╗╨╕╨╛╤В╨╡╨║╨╕...
+if errorlevel 1 goto nopython
+echo   Проверяю библиотеки...
 python -m pip install --quiet --disable-pip-version-check -r requirements.txt
 echo.
-python engine\run.py %*
+python engine/run.py %*
+if errorlevel 1 goto failed
 echo.
-if errorlevel 1 (
-  echo   ╨а╨░╤Б╤З╤С╤В ╨╖╨░╨▓╨╡╤А╤И╨╕╨╗╤Б╤П ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣. ╨в╨╡╨║╤Б╤В ╨▓╤Л╤И╨╡.
-) else (
-  echo   ╨У╨╛╤В╨╛╨▓╨╛. ╨Ю╤В╤З╤С╤В╤Л ╨▓ ╨┐╨░╨┐╨║╨╡ 3_╨Ю╨в╨з╨Б╨в╨л.
-  for /f "delims=" %%d in ('dir /b /ad /o-d "3_╨Ю╨в╨з╨Б╨в╨л"') do (
-    start "" "3_╨Ю╨в╨з╨Б╨в╨л\%%d"
-    goto :╨║╨╛╨╜╨╡╤Ж
-  )
+echo   Готово. Открываю папку с отчётами...
+for /f "delims=" %%d in ('dir /b /ad /o-d "3_ОТЧЁТЫ" 2^>nul') do (
+  start "" "%~dp03_ОТЧЁТЫ\%%d"
+  goto done
 )
-:╨║╨╛╨╜╨╡╤Ж
+goto done
+
+:nopython
+echo.
+echo   ОШИБКА: Python не установлен.
+echo   Скачайте с python.org и при установке отметьте
+echo   галочку "Add Python to PATH".
+goto done
+
+:failed
+echo.
+echo   Расчёт остановлен. Причина указана выше.
+goto done
+
+:done
 echo.
 pause
