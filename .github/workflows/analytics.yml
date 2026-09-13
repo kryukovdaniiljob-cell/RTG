@@ -4,27 +4,31 @@ name: Категорийная аналитика
 #   1) автоматически — когда вы загрузили файл в папку 1_ВХОД
 #   2) вручную — вкладка Actions -> Категорийная аналитика -> Run workflow
 #   3) по расписанию — каждый будний день в 07:00 МСК (если файлы лежат в 1_ВХОД)
+#
+# ВАЖНО: идентификаторы job и step (jobs.<id>, steps.<id>) должны быть
+# латиницей — GitHub Actions не принимает кириллицу в идентификаторах.
+# Отображаемые названия (name:) кириллицей можно.
 on:
   push:
     paths:
       - '1_ВХОД/**'
       - 'config/**'
       - 'engine/**'
+      - '.github/workflows/**'
   workflow_dispatch:
   schedule:
     - cron: '0 4 * * 1-5'
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: analytics
   cancel-in-progress: false
 
 jobs:
-  считать:
+  analytics:
+    name: Расчёт и сборка отчётов
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -41,31 +45,38 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Проверить, есть ли что считать
-        id: проверка
+        id: check
         run: |
-          if ls 1_ВХОД/*.xlsb 1_ВХОД/*.xlsx 1_ВХОД/*.xlsm >/dev/null 2>&1; then
-            echo "есть=да" >> $GITHUB_OUTPUT
+          shopt -s nullglob
+          files=(1_ВХОД/*.xlsb 1_ВХОД/*.xlsx 1_ВХОД/*.xlsm)
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "found=yes" >> "$GITHUB_OUTPUT"
+            echo "Найдено файлов: ${#files[@]}"
           else
-            echo "есть=нет" >> $GITHUB_OUTPUT
-            echo "::notice::В папке 1_ВХОД нет файлов — считать нечего."
+            echo "found=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::В папке 1_ВХОД нет выгрузок — считать нечего. Загрузите файлы и запуск пойдёт сам."
           fi
 
       - name: Посчитать и собрать отчёты
-        if: steps.проверка.outputs.есть == 'да'
+        if: steps.check.outputs.found == 'yes'
         run: python engine/run.py
 
       - name: Показать итог в сводке запуска
-        if: steps.проверка.outputs.есть == 'да'
+        if: steps.check.outputs.found == 'yes'
         run: |
-          ПАПКА=$(ls -td 3_ОТЧЁТЫ/*/ | head -1)
-          echo "## Расчёт выполнен" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -20 "${ПАПКА}журнал.txt" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "Отчёты: \`${ПАПКА}\`" >> $GITHUB_STEP_SUMMARY
+          DIR=$(ls -td 3_ОТЧЁТЫ/*/ | head -1)
+          {
+            echo "## Расчёт выполнен"
+            echo ""
+            echo '```'
+            tail -20 "${DIR}журнал.txt"
+            echo '```'
+            echo ""
+            echo "Отчёты лежат в \`${DIR}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Сохранить отчёты в репозиторий
-        if: steps.проверка.outputs.есть == 'да'
+      - name: Сохранить отчёты и дашборд в репозиторий
+        if: steps.check.outputs.found == 'yes'
         run: |
           git config user.name  "Категорийная аналитика"
           git config user.email "actions@github.com"
@@ -80,7 +91,7 @@ jobs:
           fi
 
       - name: Приложить обработанные исходники к запуску
-        if: steps.проверка.outputs.есть == 'да'
+        if: steps.check.outputs.found == 'yes'
         uses: actions/upload-artifact@v4
         with:
           name: Исходники-обработанные
@@ -89,28 +100,10 @@ jobs:
           if-no-files-found: ignore
 
       - name: Приложить отчёты к запуску
-        if: steps.проверка.outputs.есть == 'да'
+        if: steps.check.outputs.found == 'yes'
         uses: actions/upload-artifact@v4
         with:
           name: Отчёты
           path: 3_ОТЧЁТЫ/
           retention-days: 90
-
-      - name: Подготовить публикацию дашборда
-        if: steps.проверка.outputs.есть == 'да'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-
-  опубликовать:
-    needs: считать
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.pages.outputs.page_url }}
-    steps:
-      - name: Опубликовать дашборд
-        id: pages
-        uses: actions/deploy-pages@v4
-        continue-on-error: true
+          if-no-files-found: ignore
