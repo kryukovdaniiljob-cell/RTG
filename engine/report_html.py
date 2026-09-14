@@ -171,7 +171,7 @@ def dashboard(путь, св, списки, S, cfg, ряды, лог=print):
      ("Маржа", пц(S["маржа"]) + " %", "по обороту", "green"),
      ("GMROI", пц(S["gmroi"], 2), "порог владения %s" % пц(порог, 2),
       "green" if S["gmroi"] >= порог else "red"),
-     ("Эконом. прибыль", млн(S["эконом_прибыль"]) + " млн ₽/год", "валовая минус владение",
+     ("Прибыль за вычетом содержания", млн(S["эконом_прибыль"]) + " млн ₽/год", "валовая минус владение",
       "green" if S["эконом_прибыль"] > 0 else "red"),
      ("OOS", пц(S["oos"]) + " %", "Fill Rate %s %%" % пц(S["fill_rate"]), "red"),
      ("Упущенные продажи", млн(S["упущено"]) + " млн ₽", "DNS %s ед." % цел(S["dns"]), "red"),
@@ -378,7 +378,7 @@ var D=__ДАННЫЕ__, OWN=__OWN__, GOOD=__GOOD__, LIM=__ЛИМИТ__, MM=__М�
 var COLS=[{k:'n',t:'Наименование',f:'t'},{k:'m',t:'Динамика',f:'sp'},
 {k:'sku',t:'SKU',f:'i'},{k:'dead',t:'Без продаж',f:'i'},
 {k:'rev',t:'Оборот, млн ₽',f:'mn'},{k:'mar',t:'Маржа',f:'p'},{k:'st',t:'Запас, млн ₽',f:'mn'},
-{k:'d',t:'Дней запаса',f:'d'},{k:'g',t:'GMROI',f:'g'},{k:'ep',t:'Эк. прибыль, млн ₽/год',f:'mn'},
+{k:'d',t:'Дней запаса',f:'d'},{k:'g',t:'GMROI',f:'g'},{k:'ep',t:'Прибыль − содержание, млн ₽/год',f:'mn'},
 {k:'z',t:'Засолы',f:'p'},{k:'oos',t:'OOS',f:'p'}];
 function nf(v,d){return v==null?'—':v.toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d});}
 function esc(s){return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
