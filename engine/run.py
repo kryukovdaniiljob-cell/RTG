@@ -118,6 +118,19 @@ def ряды_по_месяцам(d, mine, oos):
 
 
 # ------------------------------------------------------------ main
+def безопасно(функция, путь, *а, **кв):
+    """Если файл открыт в Excel, пишем рядом с пометкой, а не падаем."""
+    try:
+        return функция(путь, *а, **кв)
+    except PermissionError:
+        корень, расш = os.path.splitext(путь)
+        новый = "%s (файл был открыт, %s)%s" % (корень, dt.datetime.now().strftime("%H-%M"), расш)
+        лог("   ! «%s» открыт в Excel — сохраняю рядом:" % os.path.basename(путь))
+        лог("     %s" % os.path.basename(новый))
+        лог("     Закройте файл перед следующим расчётом, чтобы имя не менялось.")
+        return функция(новый, *а, **кв)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--вход", default=os.path.join(КОРЕНЬ, "1_ВХОД"))
@@ -271,13 +284,15 @@ def main():
     else:
         суф = "%s_данные_по_%s" % (сегодня.isoformat(), дата.strftime("%d.%m"))
     if cfg["отчёты"]["excel"]:
-        сделано.append(reports.excel(os.path.join(папка, "Расчёты_%s.xlsx" % суф), св, списки, S, cfg, лог))
+        сделано.append(безопасно(reports.excel, os.path.join(папка, "Расчёты_%s.xlsx" % суф),
+                                 св, списки, S, cfg, лог))
     if cfg["отчёты"]["word"]:
-        сделано.append(word(os.path.join(папка, "Аналитическая_записка_%s.docx" % суф),
-                            св, списки, S, cfg, лог, гр))
+        сделано.append(безопасно(word, os.path.join(папка, "Аналитическая_записка_%s.docx" % суф),
+                                 св, списки, S, cfg, лог, гр))
     if cfg["отчёты"]["дашборд"]:
         pass
-        p = dashboard(os.path.join(папка, "Дашборд_%s.html" % суф), св, списки, S, cfg, ряды, лог)
+        p = безопасно(dashboard, os.path.join(папка, "Дашборд_%s.html" % суф),
+                      св, списки, S, cfg, ряды, лог)
         сделано.append(p)
         docs = os.path.join(КОРЕНЬ, "docs")
         os.makedirs(docs, exist_ok=True)
