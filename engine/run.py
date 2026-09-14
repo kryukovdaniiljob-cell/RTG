@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-import io_excel, metrics, reports, enrich, charts, part3
+import io_excel, metrics, reports, enrich, charts, part3, portfolio
 from io_excel import ОшибкаДанных
 from report_docx import word
 from report_html import dashboard
@@ -292,6 +292,7 @@ def main():
     П["прогноз"]     = part3.прогноз_запаса(ряды, S, лог)
     списки["abc_xyz"]    = П["abc_xyz"]
     списки["поставщики"] = П["поставщики"]
+    списки["портфель"]   = portfolio.решения(св, факт, cfg, d["_годовой"], лог)
     списки["коды"]       = П["коды"]
     списки["причины"]    = П["причины"]
     S["часть3"] = {k: v for k, v in П.items()
@@ -306,7 +307,7 @@ def main():
     списки["бенчмарк"]  = (П["бенчмарк"] or {}).get("таблица")
 
     списки["факт"] = факт
-    списки["задачи"] = enrich.собрать_задачи(списки, cfg, d["_дата"], лог)
+    списки["задачи"] = enrich.собрать_задачи(списки, cfg, d["_дата"], d["_годовой"], лог)
     списки["сверка"] = сверка.get("таблица")
     списки["расхождения"] = сверка.get("расхождения")
     S["приоритеты"] = enrich.приоритеты(S, cfg)
