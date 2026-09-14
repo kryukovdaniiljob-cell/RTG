@@ -106,6 +106,43 @@ def _bars(labels, series, colors, height=170):
     return "".join(o) + "</svg>"
 
 
+ДЕНЬГИ_К = ("Оборот","Запас","ВП","Владение","Эконом_прибыль","План","Факт","Разница","Упущено",
+            "Содержание_год","Цель_ВП","Потолок_ВП","Излишек_запаса","Оборот 2025","Оборот 2026")
+ПРОЦ_К = ("Маржа_%","Выполнение_%","Рост_%","Доля_оборота_%","Доля_запаса_%","Доля 2025, %",
+          "Доля 2026, %","Сдвиг доли, п.п.","Доля_упущенного_%","Профит 2025, %","Профит 2026, %")
+
+
+def _таблица(df, порог=None, макс=60):
+    """Простая HTML-таблица из готового DataFrame."""
+    if df is None or not len(df):
+        return ""
+    d = df.head(макс)
+    шапка = "".join('<th class="%s">%s</th>' % ("num" if c in ДЕНЬГИ_К or c in ПРОЦ_К
+                                                or c in ("SKU","GMROI") else "", c)
+                    for c in d.columns)
+    строки = []
+    for _, r in d.iterrows():
+        яч = []
+        for c in d.columns:
+            v = r[c]
+            if v is None or (isinstance(v, float) and not np.isfinite(v)) or pd.isna(v):
+                яч.append('<td class="num mut">—</td>'); continue
+            if c in ДЕНЬГИ_К:
+                яч.append('<td class="num%s">%s</td>' % (" neg" if v < 0 else "", млн(v)))
+            elif c in ПРОЦ_К:
+                яч.append('<td class="num">%s %%</td>' % пц(v))
+            elif c == "GMROI":
+                кл = "bad" if (порог and v < порог) else ""
+                яч.append('<td class="num %s">%s</td>' % (кл, пц(v, 2)))
+            elif isinstance(v, (int, float, np.integer, np.floating)):
+                яч.append('<td class="num">%s</td>' % цел(v))
+            else:
+                яч.append("<td>%s</td>" % str(v)[:90])
+        строки.append("<tr>" + "".join(яч) + "</tr>")
+    return ('<table><thead><tr>%s</tr></thead><tbody>%s</tbody></table>'
+            % (шапка, "".join(строки)))
+
+
 def dashboard(путь, св, списки, S, cfg, ряды, лог=print):
     порог = S["порог"]; хор = float(cfg["экономика"]["порог_gmroi_хороший"])
     лимит_sku = int(cfg["отчёты"]["sku_в_дашборде"])
@@ -143,6 +180,49 @@ def dashboard(путь, св, списки, S, cfg, ряды, лог=print):
     kpi = "".join('<div class="kpi %s"><div class="kl">%s</div><div class="kv">%s</div>'
                   '<div class="ks">%s</div></div>' % (c, t, v, s) for t, v, s, c in KPI)
 
+    # ---- часть 3: план-факт, LFL и новые разрезы
+    ч3 = S.get("часть3") or {}
+    пф = ч3.get("план_факт") or {}
+    лф = ч3.get("lfl") or {}
+    куски = []
+    осн = (пф.get("планы") or {}).get("ИТАН") or next(iter((пф.get("планы") or {}).values()), None)
+    if осн and осн.get("выполнение") is not None:
+        пл = [осн["по_месяцам"].get(m, 0) / 1e6 for m in мес]
+        фк = [пф["факт_по_месяцам"].get(m, 0) / 1e6 for m in мес]
+        цвет = "#C0392B" if осн["выполнение"] < 90 else "#2F7D32"
+        куски.append(
+            '<h2>План и факт по месяцам, млн ₽</h2><div class="card">'
+            '<div class="lg"><span><i style="background:#8A94A0"></i>План</span>'
+            '<span><i style="background:#5BA85A"></i>Факт</span></div>' +
+            _bars(мес, [пл, фк], ["#8A94A0", "#5BA85A"]) +
+            '<div class="note" style="border-left-color:%s">План выполнен на <b>%s %%</b> '
+            'за %d завершённых месяцев: %s из %s млн ₽. Текущий месяц не в счёт — он неполный.'
+            '</div></div>' % (цвет, пц(осн["выполнение"]), len(пф.get("полные") or []),
+                              млн(осн["факт_полные"]), млн(осн["план_полные"])))
+    if лф.get("рост_%") is not None:
+        пред = ('<div class="note">Сравнение по направлениям невозможно: между годами товар '
+                'переразнесли, доля отдельных направлений сдвинулась до %s п.п.</div>'
+                % пц(лф.get("макс_сдвиг_доли", 0), 0)) if not лф.get("сопоставимо_по_направлениям", True) else ""
+        куски.append('<h2>Сравнение с прошлым годом</h2><div class="card">'
+                     '<p>За %d завершённых месяцев: <b>%s</b> млн ₽ в прошлом году против '
+                     '<b>%s</b> млн ₽ в этом — <b>%s %%</b>.</p>%s%s</div>'
+                     % (len(лф.get("полные") or []), млн(лф["оборот25"]), млн(лф["оборот26"]),
+                        ("%+.1f" % лф["рост_%"]).replace(".", ","), пред,
+                        _таблица(pd.DataFrame(лф["по_месяцам"]).rename(columns={
+                            "месяц": "Месяц", "оборот25": "Оборот 2025", "оборот26": "Оборот 2026",
+                            "рост_%": "Рост_%", "профит25_%": "Профит 2025, %",
+                            "профит26_%": "Профит 2026, %"}))))
+    for заг, ключ, подпись in (
+            ("Матрица ABC × XYZ", "abc_xyz", "Готовая политика для каждого сочетания"),
+            ("Поставщики", "поставщики", "Основа для переговоров об условиях поставки"),
+            ("Коды проблем из рабочей матрицы", "коды", "Уже размеченная диагностика"),
+            ("Почему товара не было", "причины", "У каждой причины свой адресат"),
+            ("Бенчмарк офисов", "бенчмарк", "Цель — уровень медианы, потолок — уровень лучшего")):
+        т = _таблица(списки.get(ключ), порог)
+        if т:
+            куски.append('<h2>%s</h2><div class="card"><div class="hint">%s</div>%s</div>'
+                         % (заг, подпись, т))
+
     HTML = ШАБЛОН
     for k, v in {
         "__ДАТА__": S["дата"], "__SKU__": цел(S["sku"]), "__KPI__": kpi,
@@ -157,6 +237,7 @@ def dashboard(путь, св, списки, S, cfg, ряды, лог=print):
         "__МЕСЯЦЫ__": json.dumps([m[:3] for m in мес], ensure_ascii=False),
         "__OWN__": str(порог), "__GOOD__": str(хор),
         "__ЛИМИТ__": str(int(cfg["отчёты"]["строк_в_дашборде"])),
+        "__ЧАСТЬ3__": "".join(куски),
     }.items():
         HTML = HTML.replace(k, v)
     open(путь, "w", encoding="utf-8").write(HTML)
@@ -232,6 +313,7 @@ footer{color:var(--mut);font-size:11.5px;margin-top:24px;padding-top:12px;border
 <span><i style="background:#5BA85A"></i>Оборот</span></div>__CH1__</div>
 
 <h2>Дефицит (OOS) по месяцам, %</h2><div class="card">__CH2__</div>
+__ЧАСТЬ3__
 
 <h2>Дерево: товарная иерархия</h2>
 <div class="card">
