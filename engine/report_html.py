@@ -26,6 +26,7 @@ from reports import млн, цел, пц
 ПЛОСКИЕ = [("seg_xyz", "S1_Сегмент XYZ", ["XYZ"]),
            ("seg_abc", "S4_ABC", ["ABC"]),
            ("seg_liq", "S2_Ликвидность", ["Признак ликвидности"]),
+           ("seg_st",  "S5_Статус позиции", ["Статус позиции"]),
            ("wtype",   "W2_Тип склада", ["Тип склада"]),
            ("w4",      "W4_Направление x Склад", ["Товарное направление", "Склад"])]
 
@@ -364,6 +365,7 @@ __ЧАСТЬ3__
 <button class="tab" aria-selected="true" data-k="seg_xyz">XYZ — стабильность спроса</button>
 <button class="tab" data-k="seg_abc">ABC по обороту</button>
 <button class="tab" data-k="seg_liq">Ликвидность</button>
+<button class="tab" data-k="seg_st">Статус позиции</button>
 <button class="tab" data-k="wtype">Типы складов</button>
 <button class="tab" data-k="w4">Направление × склад</button></div>
 <div class="card"><input class="f" id="q_flat" placeholder="Фильтр…"><div id="t_flat"></div></div>
