@@ -244,7 +244,7 @@ def excel(путь, св, списки, S, cfg, лог=print):
                  {"Уровень": 14, "Объект": 34, "Решение": 42, "Срочность": 12,
                   "Обоснование": 64, "Статус выполнения": 16, "Комментарий": 26},
                  порог=порог, лог=лог,
-                 заголовок="РЕШЕНИЯ ПО ПОРТФЕЛЮ: бренды, направления и склады, которые не окупают себя. Позиционный план их не чинит — тут нужно решение уровнем выше")
+                 заголовок="РЕШЕНИЯ ПО ПОРТФЕЛЮ: бренды, направления и склады, которые не окупают себя. Позиционный план их не чинит — тут нужно решение уровнем выше. ВНИМАНИЕ: уровни вложены друг в друга (бренд внутри направления, направление внутри склада) — эффекты между уровнями НЕ складываются, это одни и те же деньги с разных сторон")
 
     # --- 01.Иерархия: сворачиваемое дерево (ответ на запрос про раскрывающиеся списки)
     лист_логики(W, wb, S, cfg, {"h": Fh, "t": Ft, "n": Fn, "2": F2, "p": Fp}, созданные, лог)
@@ -454,12 +454,22 @@ def лист_иерархии(W, wb, св, S, cfg, форматы, создан�
     созданные.insert(1, "01.Иерархия")
     КОЛ = [("Наименование", 52, "t"), ("НС-Код", 13, "t"), ("Бренд", 18, "t"),
            ("Уровень", 9, "i"), ("SKU", 9, "i"),
-           ("Оборот, ₽", 15, "n"), ("Валовая прибыль, ₽", 16, "n"), ("Маржа", 9, "p"),
+           ("Оборот, ₽", 15, "n"), ("Валовая прибыль за период, ₽", 17, "n"),
+           ("Валовая прибыль за год, ₽", 17, "n"), ("Маржа", 9, "p"),
            ("Запас, ₽", 15, "n"), ("Дней запаса", 12, "i"), ("Статус позиции", 24, "t"),
            ("Стоимость владения, ₽/год", 18, "n"), ("GMROI", 10, "2"),
            ("Прибыль за вычетом содержания, ₽/год", 20, "n"),
            ("Отдача на рубль запаса, %/год", 16, "p"),
            ("Засолы", 9, "p"), ("OOS", 9, "p"), ("Динамика", 13, "t")]
+    # Номер колонки считается ОТ ИМЕНИ: вставка новой колонки больше не
+    # требует вручную пересчитывать индексы записи и условного форматирования.
+    И = {имя: j for j, (имя, _, _) in enumerate(КОЛ)}
+    ДЕНЬГИ = (("Оборот, ₽", "Оборот"), ("Валовая прибыль за период, ₽", "ВП"),
+              ("Валовая прибыль за год, ₽", "ВП_год"), ("Запас, ₽", "Запас"),
+              ("Стоимость владения, ₽/год", "Владение"),
+              ("Прибыль за вычетом содержания, ₽/год", "Эконом_прибыль"))
+    ПРОЦ = (("Маржа", "Маржа_%"), ("Отдача на рубль запаса, %/год", "Рент_запаса_%"),
+            ("Засолы", "Засол_%"), ("OOS", "OOS_%"))
     for j, (имя, ш, т) in enumerate(КОЛ):
         ws.write(0, j, имя, Fh)
         ws.set_column(j, j, ш, {"t": Ft, "i": Fn, "n": Fn, "2": F2, "p": Fp}[т])
@@ -477,15 +487,17 @@ def лист_иерархии(W, wb, св, S, cfg, форматы, создан�
         ws.write(i, 2, str(r.get("Бренд") or ""), Ft)
         ws.write(i, 3, ур + 1, Fn)
         ws.write_number(i, 4, int(r.get("SKU") or 0), Fn)
-        for j, ключ in ((5, "Оборот"), (6, "ВП"), (8, "Запас"), (11, "Владение"), (13, "Эконом_прибыль")):
+        for имя, ключ in ДЕНЬГИ:
             v = r.get(ключ)
-            ws.write_number(i, j, float(v) if pd.notna(v) else 0, Fn)
-        for j, ключ in ((7, "Маржа_%"), (14, "Рент_запаса_%"), (15, "Засол_%"), (16, "OOS_%")):
+            ws.write_number(i, И[имя], float(v) if pd.notna(v) else 0, Fn)
+        for имя, ключ in ПРОЦ:
             v = r.get(ключ)
-            ws.write(i, j, (float(v) / 100 if pd.notna(v) else None), Fp)
-        v = r.get("Дней_запаса"); ws.write(i, 9, float(v) if pd.notna(v) and np.isfinite(v) else None, Fn)
-        ws.write(i, 9, str(r.get("Статус позиции") or ""), Ft)
-        v = r.get("GMROI");       ws.write(i, 12, float(v) if pd.notna(v) else None, F2)
+            ws.write(i, И[имя], (float(v) / 100 if pd.notna(v) else None), Fp)
+        v = r.get("Дней_запаса")
+        ws.write(i, И["Дней запаса"], float(v) if pd.notna(v) and np.isfinite(v) else None, Fn)
+        ws.write(i, И["Статус позиции"], str(r.get("Статус позиции") or ""), Ft)
+        v = r.get("GMROI")
+        ws.write(i, И["GMROI"], float(v) if pd.notna(v) else None, F2)
         for k, c in enumerate(мк):
             ws.write_number(i, м0 + k, float(r.get(c) or 0), Fn)
         # уровень группировки: строки глубже сворачиваются под родителя
@@ -499,16 +511,17 @@ def лист_иерархии(W, wb, св, S, cfg, форматы, создан�
     ws.autofilter(0, 0, n, len(КОЛ) - 1)
     ws.outline_settings(True, False, True, False)
     # светофор по GMROI и полосы данных по обороту и запасу
-    ws.conditional_format(1, 12, n, 12, {"type": "cell", "criteria": "<", "value": порог,
+    _g = И["GMROI"]; _p = И["Прибыль за вычетом содержания, ₽/год"]
+    ws.conditional_format(1, _g, n, _g, {"type": "cell", "criteria": "<", "value": порог,
         "format": wb.add_format({"bg_color": "#FFC7CE", "font_color": "#9C0006",
                                  "num_format": "#,##0.00", "font_name": "Arial", "font_size": 9})})
-    ws.conditional_format(1, 12, n, 12, {"type": "cell", "criteria": ">=", "value": хор,
+    ws.conditional_format(1, _g, n, _g, {"type": "cell", "criteria": ">=", "value": хор,
         "format": wb.add_format({"bg_color": "#C6EFCE", "font_color": "#006100",
                                  "num_format": "#,##0.00", "font_name": "Arial", "font_size": 9})})
-    for кол in (5, 8):
+    for кол in (И["Оборот, ₽"], И["Запас, ₽"]):
         ws.conditional_format(1, кол, n, кол, {"type": "data_bar", "bar_color": "#9DC3E6",
                                                "bar_solid": True, "bar_only": False})
-    ws.conditional_format(1, 13, n, 13, {"type": "cell", "criteria": "<", "value": 0,
+    ws.conditional_format(1, _p, n, _p, {"type": "cell", "criteria": "<", "value": 0,
         "format": wb.add_format({"font_color": "#9C0006", "num_format": "#,##0",
                                  "font_name": "Arial", "font_size": 9})})
     _печать(ws, "Иерархия · данные на %s" % S["дата"], альбом=True, повтор=True)
@@ -872,11 +885,19 @@ def лист_по_складам(W, wb, факт, S, cfg, форматы, соз
     созданные.insert(созданные.index("01.Иерархия") + 1 if "01.Иерархия" in созданные else 2,
                      "02.По складам")
     КОЛ = [("Наименование", 54, "t"), ("НС-Код", 13, "t"), ("Уровень", 9, "i"), ("SKU", 9, "i"),
-           ("Оборот, ₽", 15, "n"), ("Валовая прибыль, ₽", 16, "n"), ("Маржа", 9, "p"),
+           ("Оборот, ₽", 15, "n"), ("Валовая прибыль за период, ₽", 17, "n"),
+           ("Валовая прибыль за год, ₽", 17, "n"), ("Маржа", 9, "p"),
            ("Запас, ₽", 15, "n"), ("Дней запаса", 12, "i"), ("Статус позиции", 24, "t"),
            ("Стоимость владения, ₽/год", 18, "n"), ("GMROI", 10, "2"),
            ("Прибыль за вычетом содержания, ₽/год", 20, "n"),
            ("Отдача на рубль запаса, %/год", 16, "p"), ("Засолы", 9, "p")]
+    И = {имя: j for j, (имя, _, _) in enumerate(КОЛ)}
+    ДЕНЬГИ = (("Оборот, ₽", "Оборот"), ("Валовая прибыль за период, ₽", "ВП"),
+              ("Валовая прибыль за год, ₽", "ВП_год"), ("Запас, ₽", "Запас"),
+              ("Стоимость владения, ₽/год", "Владение"),
+              ("Прибыль за вычетом содержания, ₽/год", "Эконом_прибыль"))
+    ПРОЦ = (("Маржа", "Маржа_%"), ("Отдача на рубль запаса, %/год", "Рент_запаса_%"),
+            ("Засолы", "Засол_%"))
     for j, (имя, ш, т) in enumerate(КОЛ):
         ws.write(0, j, имя, Fh)
         ws.set_column(j, j, ш, {"t": Ft, "i": Fn, "n": Fn, "2": F2, "p": Fp}[т])
@@ -888,15 +909,17 @@ def лист_по_складам(W, wb, факт, S, cfg, форматы, соз
         ws.write(i, 1, str(r.get("НС-Код") or ""), Ft)
         ws.write(i, 2, ур + 1, Fn)
         ws.write_number(i, 3, int(r.get("SKU") or 0), Fn)
-        for j, ключ in ((4, "Оборот"), (5, "ВП"), (7, "Запас"), (10, "Владение"), (12, "Эконом_прибыль")):
+        for имя, ключ in ДЕНЬГИ:
             v = r.get(ключ)
-            ws.write_number(i, j, float(v) if pd.notna(v) else 0, Fn)
-        for j, ключ in ((6, "Маржа_%"), (13, "Рент_запаса_%"), (14, "Засол_%")):
+            ws.write_number(i, И[имя], float(v) if pd.notna(v) else 0, Fn)
+        for имя, ключ in ПРОЦ:
             v = r.get(ключ)
-            ws.write(i, j, (float(v) / 100 if pd.notna(v) else None), Fp)
-        v = r.get("Дней_запаса"); ws.write(i, 8, float(v) if pd.notna(v) and np.isfinite(v) else None, Fn)
-        ws.write(i, 10, str(r.get("Статус позиции") or ""), Ft)
-        v = r.get("GMROI"); ws.write(i, 11, float(v) if pd.notna(v) else None, F2)
+            ws.write(i, И[имя], (float(v) / 100 if pd.notna(v) else None), Fp)
+        v = r.get("Дней_запаса")
+        ws.write(i, И["Дней запаса"], float(v) if pd.notna(v) and np.isfinite(v) else None, Fn)
+        ws.write(i, И["Статус позиции"], str(r.get("Статус позиции") or ""), Ft)
+        v = r.get("GMROI")
+        ws.write(i, И["GMROI"], float(v) if pd.notna(v) else None, F2)
         ws.set_row(i, None, None, {"level": min(ур, 7), "hidden": ур >= 2})
     n = len(строки)
     ws.freeze_panes(1, 1); ws.autofilter(0, 0, n, len(КОЛ) - 1)
@@ -905,12 +928,15 @@ def лист_по_складам(W, wb, факт, S, cfg, форматы, соз
                              "num_format": "#,##0.00", "font_name": "Arial", "font_size": 9})
     зелёный = wb.add_format({"bg_color": "#C6EFCE", "font_color": "#006100",
                              "num_format": "#,##0.00", "font_name": "Arial", "font_size": 9})
-    ws.conditional_format(1, 11, n, 11, {"type": "cell", "criteria": "<", "value": порог, "format": красный})
-    ws.conditional_format(1, 11, n, 11, {"type": "cell", "criteria": ">=", "value": хор, "format": зелёный})
-    ws.conditional_format(1, 12, n, 12, {"type": "cell", "criteria": "<", "value": 0,
+    _g = И["GMROI"]; _p = И["Прибыль за вычетом содержания, ₽/год"]
+    ws.conditional_format(1, _g, n, _g, {"type": "cell", "criteria": "<",
+                                         "value": порог, "format": красный})
+    ws.conditional_format(1, _g, n, _g, {"type": "cell", "criteria": ">=",
+                                         "value": хор, "format": зелёный})
+    ws.conditional_format(1, _p, n, _p, {"type": "cell", "criteria": "<", "value": 0,
         "format": wb.add_format({"font_color": "#9C0006", "num_format": "#,##0",
                                  "font_name": "Arial", "font_size": 9})})
-    for кол in (4, 7):
+    for кол in (И["Оборот, ₽"], И["Запас, ₽"]):
         ws.conditional_format(1, кол, n, кол, {"type": "data_bar", "bar_color": "#9DC3E6",
                                                "bar_solid": True})
     _печать(ws, "По складам · данные по %s" % S["дата"], альбом=True, повтор=True)
