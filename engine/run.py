@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-import io_excel, metrics, reports, enrich, charts, part3, portfolio
+import io_excel, metrics, reports, enrich, charts, part3, portfolio, selfcheck
 from io_excel import ОшибкаДанных
 from report_docx import word
 from report_html import dashboard
@@ -310,6 +310,10 @@ def main():
     списки["задачи"] = enrich.собрать_задачи(списки, cfg, d["_дата"], d["_годовой"], лог)
     списки["сверка"] = сверка.get("таблица")
     списки["расхождения"] = сверка.get("расхождения")
+    # Сходятся ли числа между уровнями и листами. Отдельные формулы видно
+    # глазами, согласованность — нет: за неделю три ошибки нашлись именно
+    # так, когда сумма по позициям не совпадала с итогом.
+    списки["самопроверка"] = selfcheck.проверить(св, S, списки, cfg, лог)
     S["приоритеты"] = enrich.приоритеты(S, cfg)
     S["бездействие"] = enrich.цена_бездействия(S, cfg, кварталов=1.0)
     лог("   Цена бездействия за квартал: %.2f млн руб. потерь, %.2f млн заморожено"
