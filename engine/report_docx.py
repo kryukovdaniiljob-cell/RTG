@@ -99,8 +99,16 @@ def word(путь, св, списки, S, cfg, лог=print, графики=None
         з = [float(r.get(c) or 0) for c in мк]
         if not з or max(з) <= 0:
             return "—"
+        # Отрицательный месяц (возвратов больше, чем продаж) давал
+        # отрицательный индекс и падение на выходе за границу строки.
         mx = max(з)
-        return "".join(БЛОКИ[min(len(БЛОКИ) - 1, int(v / mx * (len(БЛОКИ) - 1)))] for v in з)
+        посл = len(БЛОКИ) - 1
+
+        def _б(v):
+            i = int((v / mx) * посл) if mx else 0
+            return БЛОКИ[max(0, min(посл, i))]
+
+        return "".join(_б(v) for v in з)
 
     def поле(p, код):
         """Вставка поля Word (оглавление, номер страницы)."""

@@ -189,6 +189,26 @@ def читать_лист(path: str, sheet: str, header_row: int = 0, first_data
     return df
 
 
+def читать_лист_позиционно(path: str, sheet: str) -> pd.DataFrame:
+    """Лист как есть: колонки по номерам, без заголовка.
+
+    Нужен для листов, где шапки нет или она заполнена не по всей ширине:
+    обычный читатель оставляет только те колонки, у которых в строке
+    заголовка что-то написано, и молча теряет остальные."""
+    if path.lower().endswith(".xlsb"):
+        from pyxlsb import open_workbook
+        rows = []
+        with open_workbook(path) as wb:
+            with wb.get_sheet(sheet) as sh:
+                for row in sh.rows():
+                    rows.append({c.c: c.v for c in row})
+        if not rows:
+            return pd.DataFrame()
+        ширина = max(max(r) for r in rows if r) + 1
+        return pd.DataFrame([[d.get(j) for j in range(ширина)] for d in rows])
+    return pd.read_excel(path, sheet_name=sheet, header=None)
+
+
 def проверить_колонки(тип: str, лист: str, df: pd.DataFrame) -> list[str]:
     """Возвращает список отсутствующих обязательных колонок."""
     spec = EXPECTED.get((тип, лист))
